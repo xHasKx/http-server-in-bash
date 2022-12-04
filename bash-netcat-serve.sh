@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PORT=8888
+PORT="${1:-8888}"
 
 NCPROG=nc
 FINDPROG=find
