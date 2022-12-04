@@ -7,22 +7,23 @@ FINDPROG=find
 STATPROG=stat
 FILEPROG=file
 
-RE='^GET /(\S*)'
+RE='^(GET|HEAD) /(\S*)'
 ROOT="$(pwd)"
 
 echo "Listening on port $PORT"
 
 while true; do
-	coproc NC { $NCPROG -l -p $PORT; }
+	coproc NC { $NCPROG -l -k -p $PORT; }
 	while IFS= read -r line <&"${NC[0]}" ; do
 		line="$(echo "$line" | tr -d '\r' | tr -d '\n')"
-		if [[ "$line" =~ $RE ]]; then
-			FPATH="${BASH_REMATCH[1]}"
+		if [[ -z $METHOD && "$line" =~ $RE ]]; then
+			METHOD="${BASH_REMATCH[1]}"
+			FPATH="${BASH_REMATCH[2]}"
 			FPATH="$(echo -e ${FPATH//%/\\x})"
 			FPATH="$ROOT/$FPATH"
 		elif [[ "$line" == "" ]]; then
 			if [ -d "$FPATH" ]; then
-				echo "GET (list dir) '$FPATH'"
+				echo "$METHOD (list dir) '$FPATH'"
 				FILES=""
 				if [[ $FPATH != "$ROOT/" ]]; then
 					FILES="$FILES<li><a href=\"..\">[ .. ]</a></li>"
@@ -48,24 +49,32 @@ while true; do
 				echo "" >&"${NC[1]}"
 				echo "$LIST" >&"${NC[1]}"
 			elif [ -f "$FPATH" ]; then
-				echo "GET (sendfile) '$FPATH'"
+				echo "$METHOD (sendfile) '$FPATH'"
 				SIZE=$($STATPROG -c %s "$FPATH")
 				echo "HTTP/1.0 200 OK" >&"${NC[1]}"
-				CT="$($FILEPROG -b -i "$FPATH")"
+				case "$FPATH" in # for modern browsers to work
+					*.css)		CT="text/css"								;;
+					*.js)		CT="text/javascript"						;;
+					*)			CT="$($FILEPROG -b --mime-type "$FPATH")"	;;
+				esac
 				echo "Content-Type: $CT" >&"${NC[1]}"
-				echo "Content-Length: $SIZE" >&"${NC[1]}"
+				if [[ $METHOD == "GET" ]]; then
+					echo "Content-Length: $SIZE" >&"${NC[1]}"
+				fi
 				echo "Connection: close" >&"${NC[1]}"
 				echo "" >&"${NC[1]}"
-				cat "$FPATH" >&"${NC[1]}"
-				kill $NC_PID
+				if [[ $METHOD == "GET" ]]; then
+					cat "$FPATH" >&"${NC[1]}"
+				fi
 			else
-				echo "GET (notfound) '$FPATH'"
+				echo "$METHOD (notfound) '$FPATH'"
 				echo "HTTP/1.0 404 Not Found" >&"${NC[1]}"
 				echo "Content-Length: 0" >&"${NC[1]}"
 				echo "Connection: close" >&"${NC[1]}"
 				echo "" >&"${NC[1]}"
 			fi
 			FPATH=""
+			METHOD=""
 		fi
 	done
 done
