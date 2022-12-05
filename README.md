@@ -1,4 +1,4 @@
-# Static HTTP server in Bash and Netcat only
+# Static HTTP 1.0 server in Bash Shell with Netcat only
 
 Don't ask me "why". Because I can.
 
